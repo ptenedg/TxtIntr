@@ -6,11 +6,6 @@
 #include <cstdlib>
 #include <cstring>
 
-// Вариант 13: логарифмический калькулятор
-// Операции:
-//   ln  - натуральный логарифм (1 операнд)
-//   log - логарифм по основанию (2 операнда: y, x -> log_y(x))
-
 void usage(const char* progname) {
     std::cout << "Usage: " << progname << " -o <operation> <operand1> [operand2]\n\n"
               << "Calculator (variant 13 - logarithmic).\n\n"
@@ -19,14 +14,17 @@ void usage(const char* progname) {
               << "                           ln   - natural logarithm ln(x)\n"
               << "                           log  - logarithm log_y(x)\n"
               << "  -h, --help             Show this help message\n\n"
-              << "Operands are positional arguments.\n\n"
+              << "Operands are positional arguments.\n"
+              << "For negative operands, use '--' before them.\n\n"
               << "Examples:\n"
               << "  " << progname << " -o ln 2.71828\n"
-              << "  " << progname << " --operation log 10 1000\n";
+              << "  " << progname << " --operation log 10 1000\n"
+              << "  " << progname << " -o ln -- -5\n";
 }
 
 int main(int argc, char* argv[]) {
     std::string operation;
+    std::vector<double> operands;
 
     static struct option long_options[] = {
         {"operation", required_argument, nullptr, 'o'},
@@ -34,8 +32,11 @@ int main(int argc, char* argv[]) {
         {nullptr,     0,                 nullptr,  0 }
     };
 
+    // Подавляем сообщения об ошибках getopt
+    opterr = 0;
+
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:h", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "+o:h", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 operation = optarg;
@@ -43,20 +44,32 @@ int main(int argc, char* argv[]) {
             case 'h':
                 usage(argv[0]);
                 return 0;
+            case '?':
+                // Неизвестная опция - возможно, это отрицательное число
+                if (optind > 0 && optind <= argc) {
+                    try {
+                        size_t pos = 0;
+                        double val = std::stod(argv[optind - 1], &pos);
+                        if (pos == std::strlen(argv[optind - 1])) {
+                            operands.push_back(val);
+                        } else {
+                            std::cerr << "Error: invalid operand '" << argv[optind - 1] << "'\n";
+                            return 1;
+                        }
+                    } catch (const std::exception& e) {
+                        std::cerr << "Error: unknown option or invalid operand '" 
+                                  << argv[optind - 1] << "'\n";
+                        usage(argv[0]);
+                        return 1;
+                    }
+                }
+                break;
             default:
-                usage(argv[0]);
-                return 1;
+                break;
         }
     }
 
-    if (operation.empty()) {
-        std::cerr << "Error: operation is not specified.\n\n";
-        usage(argv[0]);
-        return 1;
-    }
-
-    // Собираем позиционные операнды
-    std::vector<double> operands;
+    // Собираем оставшиеся позиционные операнды
     for (int i = optind; i < argc; ++i) {
         try {
             size_t pos = 0;
@@ -70,6 +83,12 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: cannot parse operand '" << argv[i] << "'\n";
             return 1;
         }
+    }
+
+    if (operation.empty()) {
+        std::cerr << "Error: operation is not specified.\n\n";
+        usage(argv[0]);
+        return 1;
     }
 
     double result = 0.0;
